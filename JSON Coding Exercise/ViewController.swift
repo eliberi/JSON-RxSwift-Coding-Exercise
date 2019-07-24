@@ -7,10 +7,13 @@
 //
 
 import UIKit
+import RxSwift
+import RxCocoa
 
 class ViewController: UIViewController {
     
-    var users: [User] = []
+    var users: BehaviorRelay<[User]> = BehaviorRelay(value: [])
+    let disposeBag = DisposeBag()
 
     @IBOutlet weak var tableView: UITableView!
     
@@ -18,7 +21,8 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         
         parseJSON()
-        
+        setupTableView()
+        setupCellTap()
     }
     
     func parseJSON() {
@@ -38,14 +42,11 @@ class ViewController: UIViewController {
             
             do {
                 
-                self.users = try JSONDecoder().decode([User].self, from: data)
+                let users = try JSONDecoder().decode([User].self, from: data)
+                self.users.accept(users)
                 
             } catch let jsonError {
                 print(jsonError)
-            }
-            
-            DispatchQueue.main.async {
-                self.tableView.reloadData()
             }
             
         }
@@ -53,41 +54,37 @@ class ViewController: UIViewController {
         task.resume()
         
     }
-    
-}
 
-extension ViewController: UITableViewDataSource, UITableViewDelegate {
+}
+extension ViewController {
     
-    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        
-        return users.count
+    func setupTableView() {
+        users.bind(to: tableView.rx.items(cellIdentifier: "Cell")) {
+            row, model, cell in
+            cell.textLabel?.text = model.name
+            cell.detailTextLabel?.text = model.address?.zipcode
+        }.disposed(by: disposeBag)
     }
     
-    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        
-        let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath)
-        let user = users[indexPath.row]
-        cell.textLabel?.text = user.name
-        cell.detailTextLabel?.text = user.address?.zipcode
-        
-        return cell
+    func setupCellTap() {
+        tableView.rx.modelSelected(User.self)
+            .subscribe(onNext: { user in
+                if let name = user.name {
+                    print(name)
+                }
+                
+                if let email = user.email {
+                    print(email)
+                }
+                
+                if let zipcode = user.address?.zipcode {
+                    print(zipcode)
+                }
+                
+                if let selectedRowIndexPath = self.tableView.indexPathForSelectedRow {
+                    self.tableView.deselectRow(at: selectedRowIndexPath, animated: true)
+                }
+            })
+        .disposed(by: disposeBag)
     }
-    
-    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        let user = users[indexPath.row]
-        if let name = user.name {
-            print(name)
-        }
-        
-        if let email = user.email {
-            print(email)
-        }
-        
-        if let zipcode = user.address?.zipcode {
-            print(zipcode)
-        }
-        
-        tableView.deselectRow(at: indexPath, animated: true)
-    }
-    
 }
